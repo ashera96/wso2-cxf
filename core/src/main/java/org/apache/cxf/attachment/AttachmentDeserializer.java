@@ -396,6 +396,12 @@ public class AttachmentDeserializer {
                     // preserve the line break and append the continuation
                     buffer.append("\r\n");
                     buffer.append(b);
+
+                    if (buffer.length() > maxHeaderLength) {
+                        LOG.fine("The attachment header size has exceeded the configured parameter: "
+                            + maxHeaderLength);
+                        throw new HeaderSizeExceededException();
+                    }
                 }
             } else {
                 // if we have a line pending in the buffer, flush it
@@ -474,6 +480,11 @@ public class AttachmentDeserializer {
             throw new IOException("The attachment contains more headers than are permitted");
         }
         List<String> v = heads.computeIfAbsent(name, k -> new ArrayList<>(1));
+        final int headerSize = v.stream().mapToInt(String::length).sum();
+        if ((headerSize + value.length()) > maxHeaderLength) {
+            LOG.fine("The attachment header size has exceeded the configured parameter: " + maxHeaderLength);
+            throw new HeaderSizeExceededException();
+        }
         v.add(value);
     }
 
