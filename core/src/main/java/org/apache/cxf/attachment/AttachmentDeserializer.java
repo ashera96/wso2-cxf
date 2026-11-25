@@ -386,6 +386,7 @@ public class AttachmentDeserializer {
         StringBuilder buffer = new StringBuilder(128);
         StringBuilder b = new StringBuilder(128);
         Map<String, List<String>> heads = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+        int totalHeadersCollected = 0;
 
         // loop until we hit the end or a null line
         while (readLine(in, b)) {
@@ -406,7 +407,12 @@ public class AttachmentDeserializer {
             } else {
                 // if we have a line pending in the buffer, flush it
                 if (buffer.length() > 0) {
-                    addHeaderLine(heads, buffer);
+                    if (addHeaderLine(heads, buffer)) {
+                        totalHeadersCollected += 1;
+                        if (totalHeadersCollected > maxHeadersCount) {
+                            throw new IOException("The attachment contains more headers than are permitted");
+                        }
+                    }
                     buffer.setLength(0);
                 }
                 // add this to the accumulator
@@ -415,8 +421,11 @@ public class AttachmentDeserializer {
         }
 
         // if we have a line pending in the buffer, flush it
-        if (buffer.length() > 0) {
-            addHeaderLine(heads, buffer);
+        if (buffer.length() > 0 && addHeaderLine(heads, buffer)) {
+            totalHeadersCollected += 1;
+            if (totalHeadersCollected > maxHeadersCount) {
+                throw new IOException("The attachment contains more headers than are permitted");
+            }
         }
         return heads;
     }
@@ -450,11 +459,11 @@ public class AttachmentDeserializer {
         return buffer.length() != 0;
     }
 
-    private void addHeaderLine(Map<String, List<String>> heads, StringBuilder line) throws IOException {
+    private boolean addHeaderLine(Map<String, List<String>> heads, StringBuilder line) throws IOException {
         // null lines are a nop
         final int size = line.length();
         if (size == 0) {
-            return;
+            return false;
         }
         int separator = line.indexOf(":");
         final String name;
@@ -485,7 +494,7 @@ public class AttachmentDeserializer {
             LOG.fine("The attachment header size has exceeded the configured parameter: " + maxHeaderLength);
             throw new HeaderSizeExceededException();
         }
-        v.add(value);
+        return v.add(value);
     }
 
 }
